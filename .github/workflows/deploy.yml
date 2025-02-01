@@ -18,42 +18,40 @@ jobs:
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          token_format: 'access_token'
 
       - name: Set up Google Cloud SDK  # Step 2: Authenticate with GCP
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}  # Use the secret you stored
+          install_components: 'beta'
 
-      - name: Configure Docker for authentication  # Step 3: Prepare Docker
+      - name: Configure Docker
         run: |
-          gcloud auth configure-docker
-          echo "gcloud auth configure-docker output:"
-          gcloud auth print-access-token
+          gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Explicit Docker Login
+      - name: Build and Push Docker image
         run: |
-          printf '%s' "${{ secrets.GCP_SA_KEY }}" | docker login -u _json_key --password-stdin https://us-docker.pkg.dev
+          docker build -t us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:${{ github.sha }} -f api/Dockerfile .
+          docker push us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:${{ github.sha }}
 
-      - name: Build Docker image  # Step 4: Build the image
-        run: |
-          # Building the Docker image using the Dockerfile in the api folder.
-          docker build -t us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:latest -f api/Dockerfile .
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: my-microservice
+          region: us-central1
+          image: us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:${{ github.sha }}
+          env_vars: |
+            FLASK_ENV=production
+          secrets: |
+            SERVICE_API_KEY=SERVICE_API_KEY:latest
+            OPENAI_API_KEY=OPENAI_API_KEY:latest
+            GOOGLE_API_KEY=GOOGLE_API_KEY:latest
+            ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest
+            PINECONE_API_KEY=PINECONE_API_KEY:latest
+            WANDB_API_KEY=WANDB_API_KEY:latest
 
-      - name: Push Docker image to Container Registry  # Step 5: Store the image
-        run: |
-          # Pushing the built image to Google Container Registry.
-          docker push us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:latest
-
-      - name: Deploy to Cloud Run  # Step 6: Deploy to Cloud Run
-        run: |
-          # Deploying to Cloud Run using the pushed image.
-          gcloud run deploy my-microservice \
-            --image us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:latest \
-            --region us-central1 \
-            --allow-unauthenticated \
-            --set-secrets SERVICE_API_KEY=SERVICE_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,GOOGLE_API_KEY=GOOGLE_API_KEY:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,PINECONE_API_KEY=PINECONE_API_KEY:latest,WANDB_API_KEY=WANDB_API_KEY:latest \
-            --set-env-vars FLASK_ENV=development \
-            --platform managed
-
-      - name: Clean up dangling Docker images  # Step 7: Optional cleanup
+      - name: Clean up
+        if: always()
         run: docker image prune -f

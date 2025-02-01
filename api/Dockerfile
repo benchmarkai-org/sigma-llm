@@ -12,9 +12,6 @@ RUN pip install -e .
 # Set the working directory to the api folder
 WORKDIR /app/api
 
-# Copy the .env file
-COPY .env /app/api/.env
-
 EXPOSE 5000
 
 CMD ["python", "app.py"] 

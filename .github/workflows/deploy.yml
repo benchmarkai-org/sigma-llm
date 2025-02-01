@@ -41,6 +41,8 @@ jobs:
             --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest \
             --region us-central1 \
             --allow-unauthenticated \
+            --set-secrets SERVICE_API_KEY=SERVICE_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,GOOGLE_API_KEY=GOOGLE_API_KEY:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,PINECONE_API_KEY=PINECONE_API_KEY:latest,WANDB_API_KEY=WANDB_API_KEY:latest \
+            --set-env-vars FLASK_ENV=development \
             --platform managed
 
       - name: Clean up dangling Docker images  # Step 7: Optional cleanup

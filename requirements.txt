@@ -1,5 +1,5 @@
 flask
-gunicorn
+gunicorn==21.2.0
 python-dotenv
 flask-limiter
 flask-cors

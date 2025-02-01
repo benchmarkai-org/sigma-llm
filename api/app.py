@@ -166,4 +166,4 @@ def health_check():
 if __name__ == '__main__':
     load_dotenv()
     app.config['DEBUG'] = os.getenv('FLASK_ENV') == 'development'
-    app.run(host='0.0.0.0', port=5000, ssl_context='adhoc')
+    app.run(host='0.0.0.0', port=8080)

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest  # Use the latest Ubuntu virtual machine
 
     steps:
-      - name: Checkout code  # Step 1: Get your code
+      - name: Checkout code 
         uses: actions/checkout@v3
 
       - name: Authenticate with Google Cloud

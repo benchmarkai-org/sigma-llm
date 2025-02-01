@@ -26,18 +26,21 @@ jobs:
 
       - name: Build Docker image  # Step 4: Build the image
         run: |
+          # Building the Docker image using the Dockerfile in the api folder.
           docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest -f api/Dockerfile .
 
       - name: Push Docker image to Container Registry  # Step 5: Store the image
         run: |
+          # Pushing the built image to Google Container Registry.
           docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest
 
       - name: Deploy to Cloud Run  # Step 6: Deploy to Cloud Run
         run: |
+          # Deploying to Cloud Run using the pushed image.
           gcloud run deploy my-microservice \
             --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest \
-            --region us-central1 \ # Change this if you're using a different region
-            --allow-unauthenticated \ # Allows anyone to access your service (for testing).  Consider removing or restricting access for production.
+            --region us-central1 \
+            --allow-unauthenticated \
             --platform managed
 
       - name: Clean up dangling Docker images  # Step 7: Optional cleanup

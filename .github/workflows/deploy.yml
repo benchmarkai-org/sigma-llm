@@ -30,18 +30,18 @@ jobs:
       - name: Build Docker image  # Step 4: Build the image
         run: |
           # Building the Docker image using the Dockerfile in the api folder.
-          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest -f api/Dockerfile .
+          docker build -t us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:latest -f api/Dockerfile .
 
       - name: Push Docker image to Container Registry  # Step 5: Store the image
         run: |
           # Pushing the built image to Google Container Registry.
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest
+          docker push us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:latest
 
       - name: Deploy to Cloud Run  # Step 6: Deploy to Cloud Run
         run: |
           # Deploying to Cloud Run using the pushed image.
           gcloud run deploy my-microservice \
-            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-microservice:latest \
+            --image us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:latest \
             --region us-central1 \
             --allow-unauthenticated \
             --set-secrets SERVICE_API_KEY=SERVICE_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,GOOGLE_API_KEY=GOOGLE_API_KEY:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest,PINECONE_API_KEY=PINECONE_API_KEY:latest,WANDB_API_KEY=WANDB_API_KEY:latest \

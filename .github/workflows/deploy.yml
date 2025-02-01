@@ -25,7 +25,14 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}  # Use the secret you stored
 
       - name: Configure Docker for authentication  # Step 3: Prepare Docker
-        run: gcloud auth configure-docker
+        run: |
+          gcloud auth configure-docker
+          echo "gcloud auth configure-docker output:"
+          gcloud auth print-access-token
+
+      - name: Explicit Docker Login
+        run: |
+          echo ${{ secrets.GCP_SA_KEY }} | docker login -u _json_key --password-stdin https://us-docker.pkg.dev
 
       - name: Build Docker image  # Step 4: Build the image
         run: |

@@ -460,7 +460,7 @@ class LLMManager(LLMBase):
         # Instantiate a separate judge LLM using o1 from OpenAI.
         from langchain_openai import ChatOpenAI
         judge_llm = ChatOpenAI(
-            model_name="o3-mini",
+            model_name="gpt-4o",
             temperature=0
         )
 

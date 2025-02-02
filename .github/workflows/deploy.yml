@@ -65,6 +65,15 @@ jobs:
             ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest
             PINECONE_API_KEY=PINECONE_API_KEY:latest
             WANDB_API_KEY=WANDB_API_KEY:latest
+          flags: |
+            --allow-unauthenticated
+            --port=8080
+            --memory=1Gi
+            --cpu=1
+            --min-instances=0
+            --max-instances=10
+            --concurrency=80
+            --timeout=300
 
       - name: Clean up
         if: always()

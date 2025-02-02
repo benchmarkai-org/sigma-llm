@@ -10,6 +10,10 @@ jobs:
     name: Deploy to Cloud Run 
     runs-on: ubuntu-latest  # Use the latest Ubuntu virtual machine
 
+    env:
+      REGION: us-central1
+      REPO: my-microservice
+
     steps:
       - name: Checkout code 
         uses: actions/checkout@v3
@@ -29,22 +33,29 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}  # Use the secret you stored
           install_components: 'beta'
 
+      - name: Create Artifact Registry Repository
+        run: |
+          gcloud artifacts repositories create ${{ env.REPO }} \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --description="Repository for my microservice" || true
+
       - name: Configure Docker
         run: |
-          gcloud auth configure-docker us-docker.pkg.dev
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build and Push Docker image
         run: |
-          docker build -t us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:${{ github.sha }} -f api/Dockerfile .
-          docker push us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:${{ github.sha }}
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }} -f api/Dockerfile .
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v1
         with:
-          service: my-microservice
-          region: us-central1
-          image: us-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-microservice/my-microservice:${{ github.sha }}
+          service: ${{ env.REPO }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }}
           env_vars: |
             FLASK_ENV=production
           secrets: |

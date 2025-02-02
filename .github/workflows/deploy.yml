@@ -45,9 +45,16 @@ jobs:
         run: |
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      - name: Build and Push Docker image
+      - name: Build Docker image
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }} -f api/Dockerfile .
+
+      - name: Push Docker image with debug
+        run: |
+          # Enable shell command echo for debugging
+          set -x
+          # Enable Docker CLI debug logging
+          export DOCKER_CLI_DEBUG=1
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }}
 
       - name: Wait for image propagation

@@ -81,7 +81,7 @@ class LLMManager(LLMBase):
         logger.info("Connecting to Pinecone")
         
         pinecone_api_key = os.getenv("PINECONE_API_KEY")
-        index_name = os.getenv("PINECONE_INDEX_NAME", "sigma-rules")  # Default if not set
+        index_name = os.getenv("PINECONE_INDEX_NAME", "sigma-2024-05-13")  # Default if not set
         
         if not pinecone_api_key:
             raise ValueError("Missing required Pinecone API key")

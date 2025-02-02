@@ -9,8 +9,10 @@ from langchain.evaluation import load_evaluator
 from pathlib import Path
 import os
 import sys
+import requests
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 sys.path.append(str(Path(__file__).parent.parent))
-from sigma_llm.llm import LLMManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,69 +36,66 @@ def load_test_cases(test_file: str) -> List[Dict]:
 
 def generate_rule(query: str, config: Dict) -> str:
     """
-    Generate a rule using LLMManager.
+    Generate a rule by calling the microservice endpoint.
     """
     try:
-        llm_manager = LLMManager(model_name=config.get('MODEL_NAME', 'gpt-4o'),
-                                 use_improvement_loop=True)
-        return llm_manager.generate_rule(query)
+        service_url = config.get("SERVICE_URL", "https://my-microservice-680275457059.us-central1.run.app")
+        url = service_url.rstrip("/") + "/api/v1/rules"
+        headers = {"Authorization": f"Bearer {config.get('SERVICE_API_KEY', '')}"}
+        payload = {"query": query}
+
+        # Set up a session with a retry strategy to handle 503 errors
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=5,
+            backoff_factor=3,
+            status_forcelist=[503],
+            allowed_methods=["POST"]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        response = session.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        rule = data.get("rule")
+        if not rule:
+            raise Exception("No rule returned from service")
+        return rule
     except Exception as e:
         logger.error(f"Rule generation failed: {str(e)}")
         raise Exception(f"Failed to generate rule: {str(e)}")
 
 def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
     """
-    Get a judgment comparison between two rules using LLMManager with Anthropic model.
+    Get a judgment comparison between two rules by calling the microservice endpoint.
     """
     try:
-        # Create a separate LLMManager instance specifically for judging with Anthropic
-        llm_manager = LLMManager(
-            model_name='claude-3-5-sonnet-latest',  # Use Anthropic model for judging
-            use_improvement_loop=False
+        service_url = config.get("SERVICE_URL", "https://my-microservice-680275457059.us-central1.run.app")
+        url = service_url.rstrip("/") + "/api/v1/judge"
+        headers = {"Authorization": f"Bearer {config.get('SERVICE_API_KEY', '')}"}
+        payload = {"rule1": rule1, "rule2": rule2}
+
+        # Set up a session with a retry strategy to handle 503 errors
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=2,
+            status_forcelist=[503],
+            allowed_methods=["POST"]
         )
-        judgment = llm_manager.judge_rules(rule1, rule2)
-        
-        # Detailed debug logging
-        logger.debug(f"Received judgment type: {type(judgment)}")
-        logger.debug(f"Received judgment content: {repr(judgment)}")
-        
-        if isinstance(judgment, str):
-            # Strip markdown code block syntax if present
-            judgment = judgment.strip()
-            if judgment.startswith("```json"):
-                judgment = judgment[7:]  # Remove ```json
-            if judgment.endswith("```"):
-                judgment = judgment[:-3]  # Remove ```
-            judgment = judgment.strip()  # Remove any remaining whitespace
-            
-            try:
-                judgment_dict = json.loads(judgment)
-                return {
-                    "detailed_comparison": judgment_dict,
-                    "score": float(judgment_dict.get("score", 0.5))
-                }
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse judgment JSON: {str(e)}")
-                logger.error(f"Raw judgment string: '{repr(judgment)}'")
-                return {
-                    "detailed_comparison": judgment,
-                    "score": 0.5
-                }
-        elif isinstance(judgment, dict):
-            return {
-                "detailed_comparison": judgment,
-                "score": float(judgment.get("score", 0.5))
-            }
-        else:
-            logger.error(f"Unexpected judgment type: {type(judgment)}")
-            return {
-                "detailed_comparison": str(judgment),
-                "score": 0.5
-            }
-            
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        response = session.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        judgment = data.get("judgment")
+        return judgment
     except Exception as e:
-        logger.error(f"Judge comparison failed: {str(e)}")
-        logger.error(f"Full traceback: ", exc_info=True)
+        logger.error(f"Judge comparison failed: {str(e)}", exc_info=True)
         raise Exception(f"Failed to get judgment: {str(e)}")
 
 def evaluate_rule(generated_rule: str, expected_rule: str, config: Dict) -> tuple:
@@ -272,13 +271,15 @@ def main():
     # Load environment variables
     load_dotenv()
     
-    # Configuration for LLMManager
+    # Configuration for using the microservice endpoint
     config = {
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY"),
         "MODEL_NAME": os.getenv("MODEL_NAME", "gpt-4o"),
         "PINECONE_API_KEY": os.getenv("PINECONE_API_KEY"),
-        "PINECONE_INDEX_NAME": os.getenv("PINECONE_INDEX_NAME", "sigma-rules")
+        "PINECONE_INDEX_NAME": os.getenv("PINECONE_INDEX_NAME", "sigma-rules"),
+        "SERVICE_URL": "https://my-microservice-680275457059.us-central1.run.app",
+        "SERVICE_API_KEY": os.getenv("SERVICE_API_KEY")
     }
     
     # Load test cases

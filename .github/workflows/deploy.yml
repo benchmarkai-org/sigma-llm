@@ -79,8 +79,8 @@ jobs:
           flags: |
             --allow-unauthenticated
             --port=8090
-            --memory=1Gi
-            --cpu=1
+            --memory=8Gi
+            --cpu=2
             --min-instances=0
             --max-instances=10
             --concurrency=80

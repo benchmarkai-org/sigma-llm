@@ -48,7 +48,7 @@ class RuleState(TypedDict):
 class LLMManager(LLMBase):
     def __init__(self, model_name: str = "gpt-4o",
                  wandb_project: str = "sigma-rule-evaluation",
-                 use_improvement_loop: bool = True,
+                 use_improvement_loop: bool = False,
                  max_iterations: int = 2):
         logger.info(f"Initializing LLMManager with model: {model_name}")
         try:

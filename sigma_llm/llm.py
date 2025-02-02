@@ -433,33 +433,45 @@ class LLMManager(LLMBase):
         {rule2}
         ```
 
-        Your evaluation should be based on the following criteria, with specific scoring guidelines:
+        Your evaluation should be based on the following criteria, with specific scoring guidelines and penalties:
 
         1.  **Schema Compliance (20%):**
             -   Verify that both rules adhere to the official Sigma rule schema.
             -   Check for the presence of all required fields (e.g., `title`, `id`, `status`, `description`, `logsource`, `detection`).
             -   Validate the correct syntax and data types for each field.
-            -   Deduct points for missing or malformed fields (-0.2 per missing field, -0.1 per syntax error).
+            -   **Penalties:**
+                -   Missing required field: -0.2 per field
+                -   Syntax error: -0.1 per error
+                -   Incorrect data type: -0.1 per instance
 
         2.  **Detection Logic Effectiveness (50%):**
             -   Assess how well the GENERATED rule captures the intended detection logic of the EXPECTED rule.
             -   Compare the conditions, fields, and operators used in both rules.
             -   Evaluate the precision and completeness of the detection logic.
-            -   Deduct points for missing critical conditions (-0.4 per missing condition), incorrect logical operators (-0.3 per incorrect operator), or overly broad conditions (-0.2 per overly broad condition).
+            -   **Penalties:**
+                -   Missing critical condition: -0.4 per condition
+                -   Incorrect logical operator (e.g., AND vs OR): -0.3 per operator
+                -   Overly broad condition (e.g., wildcard without specific context): -0.2 per condition
+                -   Logic that does not match the expected rule: -0.5 per instance
 
         3.  **Coverage Completeness (20%):**
             -   Determine if the GENERATED rule includes all necessary conditions and fields to fully cover the intended detection scenario as defined in the EXPECTED rule.
             -   Check for any gaps in coverage or missed edge cases.
-            -   Deduct points for missing conditions or fields (-0.2 per missing element).
+            -   **Penalties:**
+                -   Missing condition or field: -0.2 per element
+                -   Missed edge case: -0.2 per instance
 
         4.  **False Positive Potential (10%):**
             -   Evaluate the likelihood of the GENERATED rule producing false positives compared to the EXPECTED rule.
             -   Consider the specificity of the conditions and the potential for legitimate activity to trigger the rule.
-            -   Deduct points for overly broad conditions or missing filters (-0.1 per potential false positive).
+            -   **Penalties:**
+                -   Overly broad condition leading to false positives: -0.1 per instance
+                -   Missing filter to reduce false positives: -0.1 per instance
 
         **Scoring Guidelines:**
         -   **1.0:** Perfect match in schema, logic, coverage, and minimal false positive potential.
-        -   **0.8 - 0.99:** Minor deviations in schema, logic, or coverage, with low false positive potential.
+        -   **0.9 - 0.99:** Minor deviations in schema, logic, or coverage, with very low false positive potential.
+        -   **0.8 - 0.89:** Minor deviations in schema, logic, or coverage, with low false positive potential.
         -   **0.6 - 0.79:** Moderate deviations in schema, logic, or coverage, with moderate false positive potential.
         -   **0.4 - 0.59:** Significant deviations in schema, logic, or coverage, with high false positive potential.
         -   **< 0.4:** Fundamentally flawed or ineffective rule.
@@ -475,11 +487,12 @@ class LLMManager(LLMBase):
                 "detection_logic": <float 0-1>,
                 "completeness": <float 0-1>,
                 "false_positive_potential": <float 0-1>
-            }}
+            }},
+            "improvement_synopsis": "<A brief synopsis of how the GENERATED rule could be improved to match the performance of the EXPECTED rule. Focus on specific changes to the detection logic, field selections, and conditions.>"
         }}
         ```
 
-        Be strict in your evaluation and use the full scoring range. The final score should reflect the overall quality of the GENERATED rule compared to the EXPECTED rule. Avoid defaulting to middle scores unless the rules are truly of middling quality.
+        Be strict in your evaluation and use the full scoring range. The final score should reflect the overall quality of the GENERATED rule compared to the EXPECTED rule. Avoid defaulting to middle scores unless the rules are truly of middling quality. The 'improvement_synopsis' should be concise and actionable.
         """)
 
         # Instantiate a separate judge LLM using o1 from OpenAI.

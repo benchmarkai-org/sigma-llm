@@ -85,6 +85,7 @@ jobs:
             --max-instances=10
             --concurrency=80
             --timeout=300
+            --service-account=${{ secrets.GCP_SA_EMAIL }}
             --verbosity=debug
 
       - name: Clean up

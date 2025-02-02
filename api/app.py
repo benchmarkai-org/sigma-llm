@@ -166,4 +166,6 @@ def health_check():
 if __name__ == '__main__':
     load_dotenv()
     app.config['DEBUG'] = os.getenv('FLASK_ENV') == 'development'
-    app.run(host='0.0.0.0', port=8080)
+    # Use the PORT environment variable if provided, otherwise default to 8090
+    port = int(os.environ.get('PORT', '8090'))
+    app.run(host='0.0.0.0', port=port)

@@ -16,7 +16,7 @@ RUN pip install -e .
 WORKDIR /app/api
 
 # The port should match what your Flask app is using
-EXPOSE 8080
+EXPOSE 8090
 
 # Use gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"] 
+CMD ["gunicorn", "--bind", "0.0.0.0:8090", "app:app"] 

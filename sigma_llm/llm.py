@@ -432,17 +432,37 @@ class LLMManager(LLMBase):
         ```
 
         Analyze, compare, and score these rules based on these specific weighted criteria:
-        1. Detection Logic Effectiveness (50%): How effectively and precisely does the generated rule capture the intended detection logic of the expected rule? Consider the specific conditions, fields, and operators used, and how well they align with the intended detection. A perfect score here would mean that the generated rule is functionally identical to the expected rule.
-        2. Coverage Completeness (20%): Does the generated rule include all necessary conditions and fields to fully cover the intended detection scenario as defined in the expected rule?
-        3. False Positive Potential (20%): How likely is the generated rule to produce false positives compared to the expected rule? Consider the specificity of the conditions and the potential for legitimate activity to trigger the rule.
-        4. Technical Implementation (10%): Is the generated rule properly formatted, optimized, and compliant with Sigma standards? Consider the use of appropriate field mappings and syntax.
+        1. Detection Logic Effectiveness (50%): How effectively and precisely does the generated rule capture the intended detection logic of the expected rule? Consider:
+           - Specific conditions, fields, and operators used
+           - Alignment with intended detection logic
+           - Critical missing/extra conditions (-0.5 per major issue)
+           - Incorrect logical operators (AND vs OR, -0.3)
+           - Functional equivalence to expected rule
+        2. Coverage Completeness (20%): 
+           - All necessary conditions/fields present (-0.2 per missing element)
+           - Handling of edge cases
+           - Temporal coverage (time windows)
+        3. False Positive Potential (20%):
+           - Specificity of conditions (-0.4 for broad wildcards)
+           - Thresholds for noisy events
+           - Environmental considerations
+        4. Technical Implementation (10%):
+           - Sigma syntax compliance
+           - Field mapping correctness
+           - Search optimization
 
-        Note that in creating the GENERATED RULE, the only instructions provided were from the "description" field of the EXPECTED RULE. It is worthwhile taking the quality of the description into consideration when assessing the quality of the GENERATED RULE.
+        Scoring Guidelines:
+        - 1.0 = Perfect functional equivalence
+        - 0.9-0.99 = Minor formatting differences
+        - 0.8-0.89 = Missing non-critical conditions
+        - 0.6-0.79 = Missing important conditions/fields
+        - <0.6 = Fundamental logic errors/missing core detection elements
+        - 0 = Completely ineffective
 
         Provide your evaluation in this strict JSON format:
         {{
             "score": <float between 0 and 1>,
-            "reasoning": "<explanation of key differences, focusing on security effectiveness and a detailed explanation of any relative security deficiencies of the GENERATED RULE>",
+            "reasoning": "<concise technical explanation focusing on security impact>",
             "criteria_scores": {{
                 "detection_logic": <float 0-1>,
                 "completeness": <float 0-1>,
@@ -451,10 +471,16 @@ class LLMManager(LLMBase):
             }}
         }}
 
-        Be strict and precise in your evaluation. Focus on security effectiveness. Provide a granular score, and do not be afraid to use the full range of 0-1. A score of 1 should be reserved for a perfect match, and a score of 0 should be used when the generated rule is completely ineffective.
-        
-        For example, if the generated rule is missing a critical condition, or uses an incorrect field, this should be reflected in a lower score. If the generated rule is a close match, but has a minor deficiency, this should be reflected in a score closer to 1.
+        Be strict and use the full scoring range:
+        - Deduct 0.5 points for missing critical conditions
+        - Deduct 0.3 for incorrect logical operators
+        - Deduct 0.2 for unnecessary fields increasing FPs
+        - Add 0.1 bonus for superior optimizations
 
+        Example scoring:
+        - Missing one critical condition: 0.5 (0.5 * 1.0) + ... = total <0.75
+        - Incorrect AND/OR logic: 0.7 (0.7 * 1.0) + ... = total <0.8
+        - Perfect match but suboptimal fields: 0.95 * 0.5 + ... = ~0.9
         """)
         
         # Instantiate a separate judge LLM using o1 from OpenAI.

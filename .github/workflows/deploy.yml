@@ -67,7 +67,7 @@ jobs:
             WANDB_API_KEY=WANDB_API_KEY:latest
           flags: |
             --allow-unauthenticated
-            --port=8080
+            --port=8090
             --memory=1Gi
             --cpu=1
             --min-instances=0

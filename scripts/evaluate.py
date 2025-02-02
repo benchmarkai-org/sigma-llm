@@ -47,8 +47,8 @@ def generate_rule(query: str, config: Dict) -> str:
         # Set up a session with a retry strategy to handle 503 errors
         session = requests.Session()
         retry_strategy = Retry(
-            total=5,
-            backoff_factor=3,
+            total=3,
+            backoff_factor=1,
             status_forcelist=[503],
             allowed_methods=["POST"]
         )

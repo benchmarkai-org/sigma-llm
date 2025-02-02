@@ -50,6 +50,9 @@ jobs:
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }} -f api/Dockerfile .
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }}
 
+      - name: Wait for image propagation
+        run: sleep 30
+
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v1

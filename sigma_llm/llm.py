@@ -417,9 +417,11 @@ class LLMManager(LLMBase):
     @weave.op()
     def judge_rules(self, rule1: str, rule2: str) -> str:
         logger.info("Starting rule comparison")
-        
+
         prompt = ChatPromptTemplate.from_template("""
-        You are an expert security analyst specializing in SIGMA rules. You can use the uploaded content to enhance your understanding. Compare the following two SIGMA rules:
+        You are an expert security analyst specializing in SIGMA rules. Your task is to compare a GENERATED Sigma rule against an EXPECTED Sigma rule, evaluating both schema compliance and security effectiveness.
+
+        Here are the two rules:
 
         GENERATED RULE:
         ```yaml
@@ -431,64 +433,55 @@ class LLMManager(LLMBase):
         {rule2}
         ```
 
-        Analyze, compare, and score these rules based on these specific weighted criteria:
-        1. Detection Logic Effectiveness (50%): How effectively and precisely does the generated rule capture the intended detection logic of the expected rule? Consider:
-           - Specific conditions, fields, and operators used
-           - Alignment with intended detection logic
-           - Critical missing/extra conditions (-0.5 per major issue)
-           - Incorrect logical operators (AND vs OR, -0.3)
-           - Functional equivalence to expected rule
-        2. Coverage Completeness (20%): 
-           - All necessary conditions/fields present (-0.2 per missing element)
-           - Handling of edge cases
-           - Temporal coverage (time windows)
-        3. False Positive Potential (20%):
-           - Specificity of conditions (-0.4 for broad wildcards)
-           - Thresholds for noisy events
-           - Environmental considerations
-        4. Technical Implementation (10%):
-           - Sigma syntax compliance
-           - Field mapping correctness
-           - Search optimization
+        Your evaluation should be based on the following criteria, with specific scoring guidelines:
 
-        Scoring Guidelines:
-        - 1.0 = Perfect functional equivalence
-        - 0.9-0.99 = Minor formatting differences or very slight deviations
-        - 0.8-0.89 = Missing non-critical conditions or minor logic flaws
-        - 0.6-0.79 = Missing important conditions/fields or significant logic flaws
-        - 0.4-0.59 = Major logic errors or missing core detection elements
-        - <0.4 = Fundamentally flawed or completely ineffective
-        - 0 = Completely ineffective
+        1.  **Schema Compliance (20%):**
+            -   Verify that both rules adhere to the official Sigma rule schema.
+            -   Check for the presence of all required fields (e.g., `title`, `id`, `status`, `description`, `logsource`, `detection`).
+            -   Validate the correct syntax and data types for each field.
+            -   Deduct points for missing or malformed fields (-0.2 per missing field, -0.1 per syntax error).
 
-        Provide your evaluation in this strict JSON format:
+        2.  **Detection Logic Effectiveness (50%):**
+            -   Assess how well the GENERATED rule captures the intended detection logic of the EXPECTED rule.
+            -   Compare the conditions, fields, and operators used in both rules.
+            -   Evaluate the precision and completeness of the detection logic.
+            -   Deduct points for missing critical conditions (-0.4 per missing condition), incorrect logical operators (-0.3 per incorrect operator), or overly broad conditions (-0.2 per overly broad condition).
+
+        3.  **Coverage Completeness (20%):**
+            -   Determine if the GENERATED rule includes all necessary conditions and fields to fully cover the intended detection scenario as defined in the EXPECTED rule.
+            -   Check for any gaps in coverage or missed edge cases.
+            -   Deduct points for missing conditions or fields (-0.2 per missing element).
+
+        4.  **False Positive Potential (10%):**
+            -   Evaluate the likelihood of the GENERATED rule producing false positives compared to the EXPECTED rule.
+            -   Consider the specificity of the conditions and the potential for legitimate activity to trigger the rule.
+            -   Deduct points for overly broad conditions or missing filters (-0.1 per potential false positive).
+
+        **Scoring Guidelines:**
+        -   **1.0:** Perfect match in schema, logic, coverage, and minimal false positive potential.
+        -   **0.8 - 0.99:** Minor deviations in schema, logic, or coverage, with low false positive potential.
+        -   **0.6 - 0.79:** Moderate deviations in schema, logic, or coverage, with moderate false positive potential.
+        -   **0.4 - 0.59:** Significant deviations in schema, logic, or coverage, with high false positive potential.
+        -   **< 0.4:** Fundamentally flawed or ineffective rule.
+        -   **0:** Completely ineffective or non-compliant rule.
+
+        Provide your evaluation in a strict JSON format:
+        ```json
         {{
             "score": <float between 0 and 1>,
-            "reasoning": "<concise technical explanation focusing on security impact>",
+            "reasoning": "<concise explanation of key differences and security implications>",
             "criteria_scores": {{
+                "schema_compliance": <float 0-1>,
                 "detection_logic": <float 0-1>,
                 "completeness": <float 0-1>,
-                "false_positive_rate": <float 0-1>,
-                "technical_quality": <float 0-1>
+                "false_positive_potential": <float 0-1>
             }}
         }}
+        ```
 
-        Be strict and use the full scoring range. The final score should be a holistic assessment, not an average of the criteria scores.
-        - Deduct 0.5 points for each missing critical condition or major logic error.
-        - Deduct 0.3 for incorrect logical operators or significant deviations from the expected logic.
-        - Deduct 0.2 for unnecessary fields that increase false positives or minor logic flaws.
-        - Add 0.1 bonus for superior optimizations or significant improvements over the expected rule.
-        - Avoid defaulting to middle scores (e.g., 0.75 or 0.78) unless the rules are truly of middling quality.
-
-        Example scoring:
-        - Missing one critical condition: 0.5 (0.5 * 1.0) + ... = total <0.75
-        - Incorrect AND/OR logic: 0.7 (0.7 * 1.0) + ... = total <0.8
-        - Perfect match but suboptimal fields: 0.95 * 0.5 + ... = ~0.9
-        - Minor formatting issues: 0.98
-        - Rule with significant logic flaws: 0.6
-        - Rule with major logic errors: 0.4
-        - Rule that is completely ineffective: 0
+        Be strict in your evaluation and use the full scoring range. The final score should reflect the overall quality of the GENERATED rule compared to the EXPECTED rule. Avoid defaulting to middle scores unless the rules are truly of middling quality.
         """)
-        
+
         # Instantiate a separate judge LLM using o1 from OpenAI.
         from langchain_openai import ChatOpenAI
         judge_llm = ChatOpenAI(

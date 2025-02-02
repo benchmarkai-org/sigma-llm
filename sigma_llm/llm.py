@@ -453,10 +453,11 @@ class LLMManager(LLMBase):
 
         Scoring Guidelines:
         - 1.0 = Perfect functional equivalence
-        - 0.9-0.99 = Minor formatting differences
-        - 0.8-0.89 = Missing non-critical conditions
-        - 0.6-0.79 = Missing important conditions/fields
-        - <0.6 = Fundamental logic errors/missing core detection elements
+        - 0.9-0.99 = Minor formatting differences or very slight deviations
+        - 0.8-0.89 = Missing non-critical conditions or minor logic flaws
+        - 0.6-0.79 = Missing important conditions/fields or significant logic flaws
+        - 0.4-0.59 = Major logic errors or missing core detection elements
+        - <0.4 = Fundamentally flawed or completely ineffective
         - 0 = Completely ineffective
 
         Provide your evaluation in this strict JSON format:
@@ -471,16 +472,21 @@ class LLMManager(LLMBase):
             }}
         }}
 
-        Be strict and use the full scoring range:
-        - Deduct 0.5 points for missing critical conditions
-        - Deduct 0.3 for incorrect logical operators
-        - Deduct 0.2 for unnecessary fields increasing FPs
-        - Add 0.1 bonus for superior optimizations
+        Be strict and use the full scoring range. The final score should be a holistic assessment, not an average of the criteria scores.
+        - Deduct 0.5 points for each missing critical condition or major logic error.
+        - Deduct 0.3 for incorrect logical operators or significant deviations from the expected logic.
+        - Deduct 0.2 for unnecessary fields that increase false positives or minor logic flaws.
+        - Add 0.1 bonus for superior optimizations or significant improvements over the expected rule.
+        - Avoid defaulting to middle scores (e.g., 0.75 or 0.78) unless the rules are truly of middling quality.
 
         Example scoring:
         - Missing one critical condition: 0.5 (0.5 * 1.0) + ... = total <0.75
         - Incorrect AND/OR logic: 0.7 (0.7 * 1.0) + ... = total <0.8
         - Perfect match but suboptimal fields: 0.95 * 0.5 + ... = ~0.9
+        - Minor formatting issues: 0.98
+        - Rule with significant logic flaws: 0.6
+        - Rule with major logic errors: 0.4
+        - Rule that is completely ineffective: 0
         """)
         
         # Instantiate a separate judge LLM using o1 from OpenAI.

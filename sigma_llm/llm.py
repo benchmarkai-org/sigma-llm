@@ -457,7 +457,14 @@ class LLMManager(LLMBase):
 
         """)
         
-        chain = prompt | self.llm | StrOutputParser()
+        # Instantiate a separate judge LLM using o1 from OpenAI.
+        from langchain_openai import ChatOpenAI
+        judge_llm = ChatOpenAI(
+            model_name="o1",
+            temperature=0
+        )
+
+        chain = prompt | judge_llm | StrOutputParser()
         try:
             result = chain.invoke({
                 "rule1": rule1,

@@ -419,7 +419,7 @@ class LLMManager(LLMBase):
         logger.info("Starting rule comparison")
 
         prompt = ChatPromptTemplate.from_template("""
-        You are an expert security analyst specializing in SIGMA rules. Your task is to compare a GENERATED Sigma rule against an EXPECTED Sigma rule, evaluating both schema compliance and security effectiveness.
+        You are an expert security analyst specializing in SIGMA rules. Your task is to compare a GENERATED Sigma rule against an EXPECTED Sigma rule, focusing exclusively on detection effectiveness and security impact.
 
         Here are the two rules:
 
@@ -433,73 +433,61 @@ class LLMManager(LLMBase):
         {rule2}
         ```
 
-        Your evaluation should be based on the following criteria, with specific scoring guidelines and penalties:
+        Your evaluation should focus on two key aspects:
 
-        1.  **Schema Compliance (20%):**
-            -   Verify that both rules adhere to the official Sigma rule schema.
-            -   Check for the presence of all required fields (e.g., `title`, `id`, `status`, `description`, `logsource`, `detection`).
-            -   Validate the correct syntax and data types for each field.
-            -   **Penalties:**
-                -   Missing required field: -0.2 per field
-                -   Syntax error: -0.1 per error
-                -   Incorrect data type: -0.1 per instance
+        1. **Detection Effectiveness (70%):**
+           - How well does the GENERATED rule detect the malicious behavior compared to the EXPECTED rule?
+           - Evaluate completeness of detection logic (fields, conditions, operators)
+           - Assess potential for detection evasion or bypass
+           - Consider coverage of attack variants and techniques
+           - **Scoring Guidelines:**
+             - 1.0: Perfect match in detection capability
+             - 0.8-0.9: Minor gaps in detection logic
+             - 0.5-0.7: Significant missing conditions or detection paths
+             - 0.2-0.4: Major gaps that would miss many attack variants
+             - 0.0-0.1: Fundamentally flawed detection logic
 
-        2.  **Detection Logic Effectiveness (50%):**
-            -   Assess how well the GENERATED rule captures the intended detection logic of the EXPECTED rule.
-            -   Compare the conditions, fields, and operators used in both rules.
-            -   Evaluate the precision and completeness of the detection logic.
-            -   **Penalties:**
-                -   Missing critical condition: -0.4 per condition
-                -   Incorrect logical operator (e.g., AND vs OR): -0.3 per operator
-                -   Overly broad condition (e.g., wildcard without specific context): -0.2 per condition
-                -   Logic that does not match the expected rule: -0.5 per instance
+        2. **False Positive Control (30%):**
+           - How precisely does the GENERATED rule filter legitimate activity compared to the EXPECTED rule?
+           - Evaluate specificity of conditions
+           - Assess filter effectiveness
+           - Consider environmental impact
+           - **Scoring Guidelines:**
+             - 1.0: Equivalent or better FP control than expected rule
+             - 0.8-0.9: Slightly higher FP potential
+             - 0.5-0.7: Moderate FP concerns
+             - 0.2-0.4: High FP rate likely
+             - 0.0-0.1: Extremely noisy, unusable in production
 
-        3.  **Coverage Completeness (20%):**
-            -   Determine if the GENERATED rule includes all necessary conditions and fields to fully cover the intended detection scenario as defined in the EXPECTED rule.
-            -   Check for any gaps in coverage or missed edge cases.
-            -   **Penalties:**
-                -   Missing condition or field: -0.2 per element
-                -   Missed edge case: -0.2 per instance
+        The final score should be weighted: (Detection_Score * 0.7) + (FP_Score * 0.3)
 
-        4.  **False Positive Potential (10%):**
-            -   Evaluate the likelihood of the GENERATED rule producing false positives compared to the EXPECTED rule.
-            -   Consider the specificity of the conditions and the potential for legitimate activity to trigger the rule.
-            -   **Penalties:**
-                -   Overly broad condition leading to false positives: -0.1 per instance
-                -   Missing filter to reduce false positives: -0.1 per instance
-
-        **Scoring Guidelines:**
-        -   **1.0:** Perfect match in schema, logic, coverage, and minimal false positive potential.
-        -   **0.9 - 0.99:** Minor deviations in schema, logic, or coverage, with very low false positive potential.
-        -   **0.8 - 0.89:** Minor deviations in schema, logic, or coverage, with low false positive potential.
-        -   **0.6 - 0.79:** Moderate deviations in schema, logic, or coverage, with moderate false positive potential.
-        -   **0.4 - 0.59:** Significant deviations in schema, logic, or coverage, with high false positive potential.
-        -   **< 0.4:** Fundamentally flawed or ineffective rule.
-        -   **0:** Completely ineffective or non-compliant rule.
-
-        Provide your evaluation in a strict JSON format:
+        Provide your evaluation in this JSON format:
         ```json
         {{
             "score": <float between 0 and 1>,
-            "reasoning": "<concise explanation of key differences and security implications>",
+            "reasoning": "<Detailed technical analysis comparing the detection logic between rules. Focus on specific differences in: field selections, condition logic, filter criteria, and their impact on detection capability. Explain exactly why these differences matter for detecting the malicious behavior.>",
             "criteria_scores": {{
-                "schema_compliance": <float 0-1>,
-                "detection_logic": <float 0-1>,
-                "completeness": <float 0-1>,
-                "false_positive_potential": <float 0-1>
+                "detection_effectiveness": <float 0-1>,
+                "false_positive_control": <float 0-1>
             }},
-            "improvement_synopsis": "<A brief synopsis of how the GENERATED rule could be improved to match the performance of the EXPECTED rule. Focus on specific changes to the detection logic, field selections, and conditions.>"
+            "improvement_synopsis": "<Specific, technical recommendations for improving the GENERATED rule's detection logic. Include exact fields to add/modify, conditions to adjust, and filters to implement. Each recommendation should directly address a gap in detection capability or false positive reduction.>"
         }}
         ```
 
-        Be strict in your evaluation and use the full scoring range. The final score should reflect the overall quality of the GENERATED rule compared to the EXPECTED rule. Avoid defaulting to middle scores unless the rules are truly of middling quality. The 'improvement_synopsis' should be concise and actionable.
+        IMPORTANT NOTES:
+        - Focus ONLY on detection logic and security effectiveness - ignore metadata, formatting, and schema issues
+        - The 'reasoning' field should provide a clear technical justification for the scoring
+        - The 'improvement_synopsis' should provide specific, actionable changes to detection logic
+        - Use the full scoring range (0-1). Don't default to middle scores
+        - A score of 1.0 should only be given for rules that match or exceed the EXPECTED rule's detection capability
+        - Consider real-world evasion techniques and attack variants in your assessment
         """)
 
-        # Instantiate a separate judge LLM using o1 from OpenAI.
-        from langchain_openai import ChatOpenAI
-        judge_llm = ChatOpenAI(
-            model_name="gpt-4o",
-            temperature=0
+        # Instantiate a separate judge LLM using Claude 3.5 Sonnet
+        judge_llm = ChatAnthropic(
+            model="claude-3-5-sonnet-latest",
+            temperature=0,
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
         )
 
         chain = prompt | judge_llm | StrOutputParser()

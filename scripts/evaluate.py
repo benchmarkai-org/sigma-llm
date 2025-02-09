@@ -56,7 +56,9 @@ def generate_rule(query: str, config: Dict) -> str:
         session.mount("http://", adapter)
         session.mount("https://", adapter)
 
-        response = session.post(url, json=payload, headers=headers)
+        timeout_seconds = 600
+
+        response = session.post(url, json=payload, headers=headers, timeout=timeout_seconds)
         response.raise_for_status()
         data = response.json()
         rule = data.get("rule")
@@ -93,6 +95,22 @@ def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
         response.raise_for_status()
         data = response.json()
         judgment = data.get("judgment")
+        
+        # Parse the JSON string into a Python dictionary
+        if isinstance(judgment, str):
+            # Remove code block markers
+            judgment = judgment.replace("```json", "").replace("```", "").strip()
+
+            if judgment:
+                try:
+                    judgment = json.loads(judgment)
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSONDecodeError: {e}. Raw response: {judgment}")
+                    logger.error(f"Stripped response: {judgment}")
+                    raise
+            else:
+                logger.warning("Received empty string for judgment.")
+                judgment = {"score": 0.5, "reasoning": "No judgment provided", "criteria_scores": {}}
         return judgment
     except Exception as e:
         logger.error(f"Judge comparison failed: {str(e)}", exc_info=True)
@@ -212,7 +230,7 @@ def calculate_combined_score(metrics: dict) -> float:
     
     return min(max(overall_score, 0.0), 1.0)
 
-def run_evaluation(config: Dict, test_cases: List[Dict]) -> List[Dict]:
+def run_evaluation(config: Dict, test_cases: List[Dict], experiment_name: str = None) -> List[Dict]:
     """
     Run evaluation on all test cases and return results.
     """
@@ -220,6 +238,7 @@ def run_evaluation(config: Dict, test_cases: List[Dict]) -> List[Dict]:
     total_cases = len(test_cases)
     
     logger.info(f"Starting evaluation of {total_cases} test cases...")
+    logger.info(f"Using configuration: {config}")
     
     for idx, case in enumerate(test_cases, 1):
         try:
@@ -236,6 +255,11 @@ def run_evaluation(config: Dict, test_cases: List[Dict]) -> List[Dict]:
                 "expected_rule": case["expected_rule"],
                 "metrics": metrics,
                 "overall_score": score,
+                "experiment": experiment_name,
+                "model_config": {
+                    "model_name": config.get("MODEL_NAME"),
+                    "service_url": config.get("SERVICE_URL"),
+                }
             })
             
             logger.info(f"Completed case {idx}/{total_cases} with score: {score:.2f}")
@@ -247,12 +271,17 @@ def run_evaluation(config: Dict, test_cases: List[Dict]) -> List[Dict]:
                 "error": str(e),
                 "metrics": None,
                 "overall_score": 0.0,
+                "experiment": experiment_name,
+                "model_config": {
+                    "model_name": config.get("MODEL_NAME"),
+                    "service_url": config.get("SERVICE_URL"),
+                }
             })
     
     logger.info(f"Evaluation complete. Processed {total_cases} cases.")
     return results 
 
-def save_results(results: List[Dict], output_dir: str):
+def save_results(results: List[Dict], output_dir: str, experiment_name: str = None):
     """
     Save evaluation results to a JSON file.
     """
@@ -260,7 +289,12 @@ def save_results(results: List[Dict], output_dir: str):
     output_path.mkdir(parents=True, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = output_path / f"evaluation_results_{timestamp}.json"
+    filename = f"evaluation_results_{timestamp}"
+    if experiment_name:
+        filename += f"_{experiment_name}"
+    filename += ".json"
+    
+    output_file = output_path / filename
     
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2)
@@ -283,7 +317,7 @@ def main():
     }
     
     # Load test cases
-    test_cases = load_test_cases("query_rule_pairs_small.json")
+    test_cases = load_test_cases("query_rule_pairs.json")
     
     # Run evaluation
     results = run_evaluation(config, test_cases)

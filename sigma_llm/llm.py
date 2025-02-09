@@ -441,11 +441,13 @@ class LLMManager(LLMBase):
            - Assess potential for detection evasion or bypass
            - Consider coverage of attack variants and techniques
            - **Scoring Guidelines:**
-             - 1.0: Perfect match in detection capability
-             - 0.8-0.9: Minor gaps in detection logic
-             - 0.5-0.7: Significant missing conditions or detection paths
-             - 0.2-0.4: Major gaps that would miss many attack variants
-             - 0.0-0.1: Fundamentally flawed detection logic
+             - 1.0: EXACT match in detection capability, or IMPROVES upon expected rule
+             - 0.9: Nearly identical detection with only trivial differences
+             - 0.7-0.8: Good detection but missing minor conditions or has slight gaps
+             - 0.5-0.6: Functional but missing important detection paths or conditions
+             - 0.3-0.4: Significant gaps that would miss many attack variants
+             - 0.1-0.2: Major flaws in detection approach
+             - 0.0: Completely misses the intended detection
 
         2. **False Positive Control (30%):**
            - How precisely does the GENERATED rule filter legitimate activity compared to the EXPECTED rule?
@@ -453,11 +455,21 @@ class LLMManager(LLMBase):
            - Assess filter effectiveness
            - Consider environmental impact
            - **Scoring Guidelines:**
-             - 1.0: Equivalent or better FP control than expected rule
-             - 0.8-0.9: Slightly higher FP potential
-             - 0.5-0.7: Moderate FP concerns
-             - 0.2-0.4: High FP rate likely
-             - 0.0-0.1: Extremely noisy, unusable in production
+             - 1.0: BETTER false positive control than expected rule
+             - 0.9: Identical false positive control to expected rule
+             - 0.7-0.8: Slightly higher FP potential but still production-ready
+             - 0.5-0.6: Moderate FP concerns requiring tuning
+             - 0.3-0.4: High FP rate needing significant revision
+             - 0.1-0.2: Very noisy, barely usable
+             - 0.0: Would flood SIEM with false positives
+
+        CRITICAL SCORING INSTRUCTIONS:
+        1. Use the FULL scoring range from 0.0 to 1.0
+        2. Do NOT default to middle scores - be decisive in your evaluation
+        3. A score of 0.7-0.8 should ONLY be given if the rule is genuinely GOOD but not PERFECT
+        4. If you see significant issues, score LOWER than 0.7
+        5. If you see minimal or no issues, score HIGHER than 0.8
+        6. The final weighted score should reflect meaningful differences between rules
 
         The final score should be weighted: (Detection_Score * 0.7) + (FP_Score * 0.3)
 
@@ -478,9 +490,9 @@ class LLMManager(LLMBase):
         - Focus ONLY on detection logic and security effectiveness - ignore metadata, formatting, and schema issues
         - The 'reasoning' field should provide a clear technical justification for the scoring
         - The 'improvement_synopsis' should provide specific, actionable changes to detection logic
-        - Use the full scoring range (0-1). Don't default to middle scores
         - A score of 1.0 should only be given for rules that match or exceed the EXPECTED rule's detection capability
         - Consider real-world evasion techniques and attack variants in your assessment
+        - BE DECISIVE - avoid defaulting to middle-range scores unless truly warranted
         """)
 
         # Instantiate a separate judge LLM using Claude 3.5 Sonnet

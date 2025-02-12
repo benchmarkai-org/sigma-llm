@@ -58,7 +58,7 @@ def require_api_key(f):
     return decorated
 
 @app.route('/api/v1/rules', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("100 per minute")
 @require_api_key
 def create_rule():
     try:
@@ -87,7 +87,7 @@ def create_rule():
         abort(500, description='Internal server error')
 
 @app.route('/api/v1/judge', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("100 per minute")
 @require_api_key
 def judge_rules():
     try:
@@ -113,7 +113,7 @@ def judge_rules():
         abort(500, description='Internal server error')
 
 @app.route('/api/v1/assess', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("100 per minute")
 @require_api_key
 def assess_rule():
     try:
@@ -138,7 +138,7 @@ def assess_rule():
         abort(500, description='Internal server error')
 
 @app.route('/api/v1/summarize-references', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("50 per minute")
 @require_api_key
 def summarize_references():
     try:

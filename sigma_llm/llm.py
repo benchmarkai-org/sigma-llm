@@ -18,6 +18,7 @@ import weave
 from datetime import datetime
 from .base import LLMBase
 import re
+import json
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -473,26 +474,8 @@ class LLMManager(LLMBase):
 
         The final score should be weighted: (Detection_Score * 0.7) + (FP_Score * 0.3)
 
-        Provide your evaluation in this JSON format:
-        ```json
-        {{
-            "score": <float between 0 and 1>,
-            "reasoning": "<Detailed technical analysis comparing the detection logic between rules. Focus on specific differences in: field selections, condition logic, filter criteria, and their impact on detection capability. Explain exactly why these differences matter for detecting the malicious behavior.>",
-            "criteria_scores": {{
-                "detection_effectiveness": <float 0-1>,
-                "false_positive_control": <float 0-1>
-            }},
-            "improvement_synopsis": "<Specific, technical recommendations for improving the GENERATED rule's detection logic. Include exact fields to add/modify, conditions to adjust, and filters to implement. Each recommendation should directly address a gap in detection capability or false positive reduction.>"
-        }}
-        ```
-
-        IMPORTANT NOTES:
-        - Focus ONLY on detection logic and security effectiveness - ignore metadata, formatting, and schema issues
-        - The 'reasoning' field should provide a clear technical justification for the scoring
-        - The 'improvement_synopsis' should provide specific, actionable changes to detection logic
-        - A score of 1.0 should only be given for rules that match or exceed the EXPECTED rule's detection capability
-        - Consider real-world evasion techniques and attack variants in your assessment
-        - BE DECISIVE - avoid defaulting to middle-range scores unless truly warranted
+        Provide your evaluation in this EXACT format (no line breaks in strings):
+        {{"score": <float between 0 and 1>, "reasoning": "<single line technical analysis>", "criteria_scores": {{"detection_effectiveness": <float 0-1>, "false_positive_control": <float 0-1>}}, "improvement_synopsis": "<single line recommendations>"}}
         """)
 
         # Instantiate a separate judge LLM using Claude 3.5 Sonnet
@@ -509,7 +492,31 @@ class LLMManager(LLMBase):
                 "rule2": rule2
             })
             logger.info("Rule comparison completed")
-            return result
+            
+            # Clean and validate the JSON response
+            try:
+                # Extract just the JSON part if there's any surrounding text
+                json_match = re.search(r'\{.*\}', result, re.DOTALL)
+                if not json_match:
+                    raise ValueError("No JSON object found in response")
+                    
+                json_str = json_match.group(0)
+                
+                # Clean the string values by replacing newlines and escaping quotes
+                json_str = re.sub(r'\s+', ' ', json_str)  # Replace multiple whitespace with single space
+                json_str = json_str.replace('\n', ' ').replace('\r', '')  # Remove newlines
+                
+                # Parse the cleaned JSON
+                parsed_result = json.loads(json_str)
+                
+                # Convert back to string with proper formatting
+                return json.dumps(parsed_result, ensure_ascii=False)
+                
+            except Exception as e:
+                logger.error(f"Failed to parse JSON response: {str(e)}")
+                logger.error(f"Raw response: {result}")
+                raise ValueError(f"Failed to parse LLM response as JSON: {str(e)}")
+                
         except Exception as e:
             logger.error(f"Error during rule comparison: {e}", exc_info=True)
             raise

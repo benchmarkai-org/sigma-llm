@@ -28,7 +28,7 @@ def parse_yaml_rule(yaml_content: str) -> Dict:
         raise
 
 def assess_rule(rule: str, config: Dict) -> Dict:
-    """Send a rule to the summarize-detection endpoint and get the results."""
+    """Send a rule to the assessment endpoint and get the results."""
     headers = {
         'Authorization': f"Bearer {config['SERVICE_API_KEY']}",
         'Content-Type': 'application/json'
@@ -40,7 +40,7 @@ def assess_rule(rule: str, config: Dict) -> Dict:
     
     try:
         response = requests.post(
-            f"{config['RULE_GENERATOR_URL']}/api/v1/summarize-detection",
+            f"{config['RULE_GENERATOR_URL']}/api/v1/assess",
             headers=headers,
             json=data,
             verify=False,
@@ -49,7 +49,7 @@ def assess_rule(rule: str, config: Dict) -> Dict:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error getting detection summary: {e}")
+        logger.error(f"Error assessing rule: {e}")
         return None
 
 def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
@@ -102,14 +102,14 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
                 logger.debug(f"No date found for rule: {rule_dict.get('title')}")
                 continue
             
-            # Get rule detection summary from LLM
-            summary_result = assess_rule(yaml_content, config)
-            if not summary_result:
-                logger.warning(f"Skipping rule due to summarization failure: {rule_dict.get('title')}")
+            # Get rule assessment from LLM
+            assessment_result = assess_rule(yaml_content, config)
+            if not assessment_result:
+                logger.warning(f"Skipping rule due to assessment failure: {rule_dict.get('title')}")
                 continue
                 
             pair = {
-                "query": summary_result['summary'],
+                "query": assessment_result['assessment'],
                 "expected_rule": yaml_content
             }
             

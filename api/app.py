@@ -126,7 +126,7 @@ def assess_rule():
         if not rule:
             logger.error("Bad request: Missing rule field")
             abort(400, description='Missing rule field')
-        if len(rule) > 5000:
+        if len(rule) > 20000:
             logger.error("Bad request: Rule too long")
             abort(400, description='Rule too long')
             
@@ -151,11 +151,21 @@ def summarize_detection():
         if not rule:
             logger.error("Bad request: Missing rule field")
             abort(400, description='Missing rule field')
-        if len(rule) > 5000:
+        if len(rule) > 20000:
             logger.error("Bad request: Rule too long")
             abort(400, description='Rule too long')
             
-        summary = llm_manager.summarize_detection(rule)
+        # Get model from request or use default
+        model = data.get('model', 'claude-3-5-sonnet-latest')
+        if model not in ['gpt-4o', 'gemini-1.5-flash', 'claude-3-5-sonnet-latest']:
+            logger.warning(f"Invalid model {model} specified, using claude-3-5-sonnet-latest")
+            model = 'claude-3-5-sonnet-latest'
+            
+        logger.info(f"Using model {model} for detection summarization")
+        
+        # Create LLM manager with specified model
+        llm = LLMManager(model_name=model)
+        summary = llm.summarize_detection(rule)
         return jsonify({"summary": summary})
         
     except Exception as e:

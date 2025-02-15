@@ -137,6 +137,31 @@ def assess_rule():
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         abort(500, description='Internal server error')
 
+@app.route('/api/v1/summarize-detection', methods=['POST'])
+@limiter.limit("1000 per minute")
+@require_api_key
+def summarize_detection():
+    try:
+        data = request.get_json()
+        if not data:
+            logger.error("Bad request: Missing request body")
+            abort(400, description='Missing request body')
+            
+        rule = data.get('rule')
+        if not rule:
+            logger.error("Bad request: Missing rule field")
+            abort(400, description='Missing rule field')
+        if len(rule) > 5000:
+            logger.error("Bad request: Rule too long")
+            abort(400, description='Rule too long')
+            
+        summary = llm_manager.summarize_detection(rule)
+        return jsonify({"summary": summary})
+        
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}", exc_info=True)
+        abort(500, description='Internal server error')
+
 @app.route('/api/v1/summarize-references', methods=['POST'])
 @limiter.limit("50 per minute")
 @require_api_key

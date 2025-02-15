@@ -579,6 +579,53 @@ class LLMManager(LLMBase):
             logger.error(f"Error during rule assessment: {e}", exc_info=True)
             raise
 
+    @weave.op()
+    def summarize_detection(self, rule: str) -> str:
+        logger.info("Starting detection logic summarization")
+        
+        prompt = ChatPromptTemplate.from_template("""
+        You are a detection engineering expert specializing in SIEM systems and Sigma rules. Your task is to create a clear, detailed summary of this rule's detection logic that could be used to recreate the rule:
+
+        {rule}
+
+        Focus exclusively on the following aspects:
+
+        1. Core Detection Logic
+           - What specific activity or behavior is being detected?
+           - What are the key conditions and their relationships?
+           - What fields and values are being monitored?
+           - How are these conditions combined (AND/OR logic)?
+
+        2. Detection Context
+           - What data sources or log types are being monitored?
+           - What systems or services are involved?
+           - What is the scope of the detection?
+
+        3. Detection Technique
+           - What specific patterns or indicators are being identified?
+           - How does the rule identify suspicious vs normal behavior?
+           - What thresholds or timing conditions are used?
+
+        Provide a clear, detailed summary that:
+        - Captures all essential elements of the detection logic
+        - Uses precise technical language
+        - Maintains logical flow and relationships between conditions
+        - Is detailed enough that another analyst could recreate similar detection logic
+        - Focuses on WHAT is being detected and HOW it's being detected
+        - Excludes implementation details, tags, metadata, or rule management information
+
+        Return a single, cohesive paragraph that comprehensively describes the detection logic.
+        """)
+        
+        chain = prompt | self.llm | StrOutputParser()
+        try:
+            result = chain.invoke({"rule": rule})
+            logger.info("Detection logic summarization completed")
+            return result
+        except Exception as e:
+            logger.error(f"Error during detection summarization: {e}", exc_info=True)
+            raise
+
     @staticmethod
     def _extract_yaml(text: str) -> str:
         logger.debug("Extracting YAML from response")

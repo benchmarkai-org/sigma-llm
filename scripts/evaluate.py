@@ -102,19 +102,43 @@ def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
             
             # Parse the JSON string into a Python dictionary
             if isinstance(judgment, str):
-                # Remove code block markers
+                # Remove code block markers and clean the string
                 judgment = judgment.replace("```json", "").replace("```", "").strip()
-
+                
                 if judgment:
                     try:
-                        judgment = json.loads(judgment)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"JSONDecodeError: {e}. Raw response: {judgment}")
-                        # Fallback to a default judgment with warning
+                        # First try to parse as is
+                        try:
+                            judgment = json.loads(judgment)
+                        except json.JSONDecodeError as e1:
+                            # If that fails, try to handle escape sequences
+                            try:
+                                # Try to handle invalid escape sequences
+                                judgment = judgment.encode('utf-8').decode('unicode-escape')
+                                judgment = json.loads(judgment)
+                            except (json.JSONDecodeError, UnicodeError) as e2:
+                                # If that fails, try to remove problematic escapes
+                                judgment = judgment.replace('\\', '\\\\')
+                                try:
+                                    judgment = json.loads(judgment)
+                                except json.JSONDecodeError as e3:
+                                    logger.error(f"All JSON parsing attempts failed. Errors: {e1}, {e2}, {e3}")
+                                    logger.error(f"Raw judgment: {judgment}")
+                                    # Fallback to a default judgment with warning
+                                    judgment = {
+                                        "score": 0.5,
+                                        "reasoning": "Error parsing judgment, using default score",
+                                        "error": f"JSON parsing failed: {str(e3)}",
+                                        "raw_response": judgment[:500]  # Include first 500 chars of raw response
+                                    }
+                    except Exception as e:
+                        logger.error(f"Error processing judgment: {str(e)}")
+                        logger.error(f"Raw judgment: {judgment}")
                         judgment = {
                             "score": 0.5,
-                            "reasoning": "Error parsing judgment, using default score",
-                            "error": str(e)
+                            "reasoning": "Error processing judgment, using default score",
+                            "error": str(e),
+                            "raw_response": judgment[:500]
                         }
                 else:
                     logger.warning("Received empty string for judgment.")

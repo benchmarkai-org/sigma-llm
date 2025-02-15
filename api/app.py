@@ -101,7 +101,7 @@ def judge_rules():
         if not all([rule1, rule2]):
             logger.error("Bad request: Missing required fields")
             abort(400, description='Missing required fields')
-        if len(rule1) > 5000 or len(rule2) > 5000:
+        if len(rule1) > 20000 or len(rule2) > 20000:
             logger.error("Bad request: Rules too long")
             abort(400, description='Rules too long')
             

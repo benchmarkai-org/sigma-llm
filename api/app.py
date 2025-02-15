@@ -157,16 +157,24 @@ def summarize_detection():
             
         # Get model from request or use default
         model = data.get('model', 'claude-3-5-sonnet-latest')
-        if model not in ['gpt-4o', 'gemini-1.5-flash', 'claude-3-5-sonnet-latest']:
-            logger.warning(f"Invalid model {model} specified, using claude-3-5-sonnet-latest")
-            model = 'claude-3-5-sonnet-latest'
+        
+        # Validate model
+        SUPPORTED_MODELS = ['gpt-4o', 'gemini-1.5-flash', 'claude-3-5-sonnet-latest']
+        if model not in SUPPORTED_MODELS:
+            error_msg = f"Invalid model '{model}' specified. Supported models: {', '.join(SUPPORTED_MODELS)}"
+            logger.warning(error_msg)
+            abort(400, description=error_msg)
             
         logger.info(f"Using model {model} for detection summarization")
         
         # Create LLM manager with specified model
-        llm = LLMManager(model_name=model)
-        summary = llm.summarize_detection(rule)
-        return jsonify({"summary": summary})
+        try:
+            llm = LLMManager(model_name=model)
+            summary = llm.summarize_detection(rule)
+            return jsonify({"summary": summary, "model_used": model})
+        except Exception as e:
+            logger.error(f"Error with model {model}: {str(e)}")
+            abort(500, description=f"Error using model {model}: {str(e)}")
         
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)

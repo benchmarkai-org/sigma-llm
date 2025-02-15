@@ -1,0 +1,39 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: sigma-experiments
+spec:
+  template:
+    spec:
+      template:
+        spec:
+          containers:
+          - image: gcr.io/PROJECT_ID/sigma-experiments
+            resources:
+              limits:
+                cpu: "4"
+                memory: "16Gi"
+            env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: latest
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-api-key
+                  key: latest
+            - name: PINECONE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pinecone-api-key
+                  key: latest
+            - name: PINECONE_INDEX_NAME
+              value: "sigma-rules"
+            - name: SERVICE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: service-api-key
+                  key: latest
+          timeoutSeconds: 7200  # 2 hour timeout 

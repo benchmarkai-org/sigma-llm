@@ -12,6 +12,7 @@ import sys
 import requests
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from google.cloud import storage
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Configure logging
@@ -72,6 +73,7 @@ def generate_rule(query: str, config: Dict) -> str:
 def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
     """
     Get a judgment comparison between two rules by calling the microservice endpoint.
+    Includes retry logic and graceful fallback for server errors.
     """
     try:
         service_url = config.get("SERVICE_URL", "https://my-microservice-680275457059.us-central1.run.app")
@@ -79,42 +81,69 @@ def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
         headers = {"Authorization": f"Bearer {config.get('SERVICE_API_KEY', '')}"}
         payload = {"rule1": rule1, "rule2": rule2}
 
-        # Set up a session with a retry strategy to handle 503 errors
+        # Set up a session with a retry strategy to handle various errors
         session = requests.Session()
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=2,
-            status_forcelist=[503],
-            allowed_methods=["POST"]
+            total=5,  # Increased total retries
+            backoff_factor=2,  # Exponential backoff
+            status_forcelist=[500, 502, 503, 504],  # Include all common server errors
+            allowed_methods=["POST"],
+            respect_retry_after_header=True
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
 
-        response = session.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        judgment = data.get("judgment")
-        
-        # Parse the JSON string into a Python dictionary
-        if isinstance(judgment, str):
-            # Remove code block markers
-            judgment = judgment.replace("```json", "").replace("```", "").strip()
+        try:
+            response = session.post(url, json=payload, headers=headers, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            judgment = data.get("judgment")
+            
+            # Parse the JSON string into a Python dictionary
+            if isinstance(judgment, str):
+                # Remove code block markers
+                judgment = judgment.replace("```json", "").replace("```", "").strip()
 
-            if judgment:
-                try:
-                    judgment = json.loads(judgment)
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSONDecodeError: {e}. Raw response: {judgment}")
-                    logger.error(f"Stripped response: {judgment}")
-                    raise
-            else:
-                logger.warning("Received empty string for judgment.")
-                judgment = {"score": 0.5, "reasoning": "No judgment provided", "criteria_scores": {}}
-        return judgment
+                if judgment:
+                    try:
+                        judgment = json.loads(judgment)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"JSONDecodeError: {e}. Raw response: {judgment}")
+                        # Fallback to a default judgment with warning
+                        judgment = {
+                            "score": 0.5,
+                            "reasoning": "Error parsing judgment, using default score",
+                            "error": str(e)
+                        }
+                else:
+                    logger.warning("Received empty string for judgment.")
+                    judgment = {
+                        "score": 0.5,
+                        "reasoning": "No judgment provided",
+                        "criteria_scores": {}
+                    }
+            return judgment
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed after retries: {str(e)}")
+            # Return a fallback judgment instead of raising
+            return {
+                "score": 0.5,
+                "reasoning": f"Service unavailable after retries: {str(e)}",
+                "error": str(e),
+                "criteria_scores": {}
+            }
+            
     except Exception as e:
         logger.error(f"Judge comparison failed: {str(e)}", exc_info=True)
-        raise Exception(f"Failed to get judgment: {str(e)}")
+        # Return a fallback judgment instead of raising
+        return {
+            "score": 0.5,
+            "reasoning": f"Error in judgment process: {str(e)}",
+            "error": str(e),
+            "criteria_scores": {}
+        }
 
 def evaluate_rule(generated_rule: str, expected_rule: str, config: Dict) -> tuple:
     """
@@ -283,23 +312,53 @@ def run_evaluation(config: Dict, test_cases: List[Dict], experiment_name: str = 
 
 def save_results(results: List[Dict], output_dir: str, experiment_name: str = None):
     """
-    Save evaluation results to a JSON file.
+    Save evaluation results to Google Cloud Storage.
     """
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"evaluation_results_{timestamp}"
-    if experiment_name:
-        filename += f"_{experiment_name}"
-    filename += ".json"
-    
-    output_file = output_path / filename
-    
-    with open(output_file, 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    return output_file
+    try:
+        # Initialize GCS client
+        storage_client = storage.Client()
+        logger.info(f"Initialized GCS client")
+        
+        # Get or create bucket (use your project ID as bucket name)
+        bucket_name = os.getenv('GCS_BUCKET_NAME', 'sigma-llm-results')
+        bucket = storage_client.bucket(bucket_name)
+        if not bucket.exists():
+            logger.info(f"Creating bucket: {bucket_name}")
+            bucket = storage_client.create_bucket(bucket_name)
+        else:
+            logger.info(f"Using existing bucket: {bucket_name}")
+        
+        # Create blob path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"evaluation_results_{timestamp}"
+        if experiment_name:
+            filename += f"_{experiment_name}"
+        filename += ".json"
+        
+        # Create full path in GCS
+        gcs_path = f"{output_dir}/{filename}"
+        logger.info(f"Saving results to path: {gcs_path}")
+        
+        # Create a placeholder file in the directory to ensure it exists
+        dir_marker = bucket.blob(f"{output_dir}/")
+        if not dir_marker.exists():
+            logger.info(f"Creating directory marker: {output_dir}/")
+            dir_marker.upload_from_string('')
+        
+        # Upload to GCS
+        blob = bucket.blob(gcs_path)
+        blob.upload_from_string(
+            json.dumps(results, indent=2),
+            content_type='application/json'
+        )
+        
+        gcs_uri = f"gs://{bucket_name}/{gcs_path}"
+        logger.info(f"Results successfully saved to: {gcs_uri}")
+        
+        return gcs_uri
+    except Exception as e:
+        logger.error(f"Error saving results to GCS: {str(e)}", exc_info=True)
+        raise
 
 def main():
     # Load environment variables

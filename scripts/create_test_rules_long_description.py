@@ -28,19 +28,20 @@ def parse_yaml_rule(yaml_content: str) -> Dict:
         raise
 
 def assess_rule(rule: str, config: Dict) -> Dict:
-    """Send a rule to the assessment endpoint and get the results."""
+    """Send a rule to the summarize-detection endpoint and get the results."""
     headers = {
         'Authorization': f"Bearer {config['SERVICE_API_KEY']}",
         'Content-Type': 'application/json'
     }
     
     data = {
-        'rule': rule
+        'rule': rule,
+        'model': config.get('MODEL_NAME', 'claude-3-5-sonnet-latest')  # Add model to request
     }
     
     try:
         response = requests.post(
-            f"{config['RULE_GENERATOR_URL']}/api/v1/assess",
+            f"{config['RULE_GENERATOR_URL']}/api/v1/summarize-detection",
             headers=headers,
             json=data,
             verify=False,
@@ -49,7 +50,7 @@ def assess_rule(rule: str, config: Dict) -> Dict:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error assessing rule: {e}")
+        logger.error(f"Error getting detection summary: {e}")
         return None
 
 def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
@@ -102,14 +103,14 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
                 logger.debug(f"No date found for rule: {rule_dict.get('title')}")
                 continue
             
-            # Get rule assessment from LLM
-            assessment_result = assess_rule(yaml_content, config)
-            if not assessment_result:
-                logger.warning(f"Skipping rule due to assessment failure: {rule_dict.get('title')}")
+            # Get rule detection summary from LLM
+            summary_result = assess_rule(yaml_content, config)
+            if not summary_result:
+                logger.warning(f"Skipping rule due to summarization failure: {rule_dict.get('title')}")
                 continue
                 
             pair = {
-                "query": assessment_result['assessment'],
+                "query": summary_result['summary'],
                 "expected_rule": yaml_content
             }
             
@@ -148,10 +149,12 @@ def main():
             "PINECONE_API_KEY": os.getenv("PINECONE_API_KEY"),
             "PINECONE_INDEX_NAME": os.getenv("PINECONE_INDEX_NAME", "sigma-rules"),
             "SERVICE_API_KEY": os.getenv("SERVICE_API_KEY"),
-            "RULE_GENERATOR_URL": os.getenv("RULE_GENERATOR_URL", "https://my-microservice-680275457059.us-central1.run.app")
+            "RULE_GENERATOR_URL": os.getenv("RULE_GENERATOR_URL", "https://my-microservice-680275457059.us-central1.run.app"),
+            "MODEL_NAME": os.getenv("MODEL_NAME", "claude-3-5-sonnet-latest")  # Add model configuration
         }
         
         logger.debug(f"Environment variables present: {list(os.environ.keys())}")
+        logger.info(f"Using LLM model: {config['MODEL_NAME']}")
         
         # Validate required config
         required_config = ['RULE_GENERATOR_URL', 'SERVICE_API_KEY']

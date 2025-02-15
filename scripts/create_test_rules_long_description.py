@@ -61,6 +61,9 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
     """
     rules_path = Path(rules_dir)
     query_rule_pairs = []
+    processed_count = 0
+    skipped_count = 0
+    error_count = 0
     
     # Get cutoff date from environment
     date_str = os.getenv('SIGMA_RULES_CUTOFF_DATE')
@@ -82,31 +85,72 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
             with open(yaml_file, 'r', encoding='utf-8') as f:
                 yaml_content = f.read()
             
+            # Basic validation of YAML content
+            if not yaml_content.strip():
+                logger.warning(f"Empty YAML file: {yaml_file}")
+                skipped_count += 1
+                continue
+                
             rule_dict = parse_yaml_rule(yaml_content)
+            if not rule_dict:
+                logger.warning(f"Invalid YAML content in {yaml_file}")
+                skipped_count += 1
+                continue
+                
+            # Validate required Sigma rule fields
+            if not all(field in rule_dict for field in ['title', 'detection']):
+                logger.warning(f"Missing required fields in {yaml_file}")
+                skipped_count += 1
+                continue
             
             # Get the most recent date (modified or creation date)
             rule_date = rule_dict.get('modified') or rule_dict.get('date')
             if rule_date:
-                if isinstance(rule_date, datetime):
-                    rule_date = rule_date.strftime('%Y-%m-%d')
                 try:
-                    rule_date = datetime.strptime(str(rule_date), '%Y-%m-%d')
+                    # Handle different date formats
+                    if isinstance(rule_date, datetime):
+                        rule_date = rule_date.strftime('%Y-%m-%d')
+                    elif isinstance(rule_date, str):
+                        # Try to parse various date formats
+                        try:
+                            # Try ISO format first
+                            rule_date = datetime.fromisoformat(rule_date).strftime('%Y-%m-%d')
+                        except ValueError:
+                            # Fallback to basic YYYY-MM-DD
+                            rule_date = datetime.strptime(rule_date, '%Y-%m-%d').strftime('%Y-%m-%d')
+                    else:
+                        logger.warning(f"Unexpected date format in {yaml_file}: {type(rule_date)}")
+                        skipped_count += 1
+                        continue
+                        
+                    rule_date = datetime.strptime(rule_date, '%Y-%m-%d')
                     date_type = "modified" if rule_dict.get('modified') else "creation"
                     logger.debug(f"Processing rule with {date_type} date {rule_date}: {rule_dict.get('title')}")
+                    
                     if rule_date <= cutoff_date:
                         logger.debug(f"⏭️ Skipping rule (before cutoff {cutoff_date}): {rule_dict.get('title')} with {date_type} date {rule_date}")
+                        skipped_count += 1
                         continue
-                except ValueError as e:
+                except (ValueError, TypeError) as e:
                     logger.warning(f"Could not parse date {rule_date} for rule {rule_dict.get('title')}: {e}")
+                    skipped_count += 1
                     continue
             else:
                 logger.debug(f"No date found for rule: {rule_dict.get('title')}")
+                skipped_count += 1
                 continue
             
             # Get rule detection summary from LLM
             summary_result = assess_rule(yaml_content, config)
             if not summary_result:
                 logger.warning(f"Skipping rule due to summarization failure: {rule_dict.get('title')}")
+                error_count += 1
+                continue
+                
+            # Validate summary result
+            if not summary_result.get('summary'):
+                logger.warning(f"Empty summary received for rule: {rule_dict.get('title')}")
+                error_count += 1
                 continue
                 
             pair = {
@@ -115,12 +159,20 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
             }
             
             query_rule_pairs.append(pair)
+            processed_count += 1
             logger.info(f"✅ Processed rule: {rule_dict.get('title')}")
                 
         except Exception as e:
             logger.error(f"❌ Error processing rule {yaml_file}: {e}")
+            error_count += 1
     
-    logger.info(f"\nProcessed {len(query_rule_pairs)} rules that were modified or created after {cutoff_date}")
+    # Log final statistics
+    logger.info(f"\nProcessing Summary:")
+    logger.info(f"- Successfully processed: {processed_count} rules")
+    logger.info(f"- Skipped: {skipped_count} rules")
+    logger.info(f"- Errors: {error_count} rules")
+    logger.info(f"- Total rules found: {processed_count + skipped_count + error_count}")
+    
     return query_rule_pairs
 
 def save_query_rule_pairs(pairs: List[Dict], output_file: str = "query_rule_pairs_long.json"):

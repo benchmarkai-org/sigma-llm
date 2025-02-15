@@ -71,7 +71,7 @@ def create_rule():
         if not query:
             logger.error("Bad request: Missing query field")
             abort(400, description='Missing query field')
-        if len(query) > 1000:
+        if len(query) > 20000:
             logger.error("Bad request: Query too long")
             abort(400, description='Query too long')
             

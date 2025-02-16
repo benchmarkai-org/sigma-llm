@@ -113,9 +113,9 @@ class LLMManager(LLMBase):
                 model_name="gpt-4o",
                 temperature=0
             )
-        elif model_name == "gemini-1.5-flash":
+        elif model_name == "gemini-2.0-flash":
             return ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 temperature=0,
                 google_api_key=os.getenv("GOOGLE_API_KEY")
             )

@@ -470,9 +470,7 @@ class LLMManager(LLMBase):
         3. A score of 0.7-0.8 should ONLY be given if the rule is genuinely GOOD but not PERFECT
         4. If you see significant issues, score LOWER than 0.7
         5. If you see minimal or no issues, score HIGHER than 0.8
-        6. The final weighted score should reflect meaningful differences between rules
-
-        The final score should be weighted: (Detection_Score * 0.7) + (FP_Score * 0.3)
+        6. The final score should be weighted: (Detection_Score * 0.7) + (FP_Score * 0.3)
 
         Provide your evaluation in this EXACT format (no line breaks in strings):
         {{"score": <float between 0 and 1>, "reasoning": "<single line technical analysis>", "criteria_scores": {{"detection_effectiveness": <float 0-1>, "false_positive_control": <float 0-1>}}, "improvement_synopsis": "<single line recommendations>"}}
@@ -498,7 +496,17 @@ class LLMManager(LLMBase):
                 # Extract just the JSON part if there's any surrounding text
                 json_match = re.search(r'\{.*\}', result, re.DOTALL)
                 if not json_match:
-                    raise ValueError("No JSON object found in response")
+                    logger.error("No JSON object found in response")
+                    return json.dumps({
+                        "score": 0.5,
+                        "reasoning": "Error: No valid JSON found in response",
+                        "criteria_scores": {
+                            "detection_effectiveness": 0.5,
+                            "false_positive_control": 0.5
+                        },
+                        "improvement_synopsis": "Error processing response",
+                        "error": "No JSON found"
+                    })
                     
                 json_str = json_match.group(0)
                 
@@ -506,20 +514,65 @@ class LLMManager(LLMBase):
                 json_str = re.sub(r'\s+', ' ', json_str)  # Replace multiple whitespace with single space
                 json_str = json_str.replace('\n', ' ').replace('\r', '')  # Remove newlines
                 
-                # Parse the cleaned JSON
-                parsed_result = json.loads(json_str)
+                # Try multiple JSON parsing approaches
+                try:
+                    # First try direct parsing
+                    parsed_result = json.loads(json_str)
+                except json.JSONDecodeError as e1:
+                    try:
+                        # Try handling escape sequences
+                        cleaned_str = json_str.encode('utf-8').decode('unicode-escape')
+                        parsed_result = json.loads(cleaned_str)
+                    except (json.JSONDecodeError, UnicodeError) as e2:
+                        try:
+                            # Try fixing escapes
+                            fixed_str = json_str.replace('\\', '\\\\')
+                            parsed_result = json.loads(fixed_str)
+                        except json.JSONDecodeError as e3:
+                            logger.error(f"All JSON parsing attempts failed: {e1}, {e2}, {e3}")
+                            logger.error(f"Raw response: {json_str}")
+                            return json.dumps({
+                                "score": 0.5,
+                                "reasoning": "Error parsing response",
+                                "criteria_scores": {
+                                    "detection_effectiveness": 0.5,
+                                    "false_positive_control": 0.5
+                                },
+                                "improvement_synopsis": "Error processing response",
+                                "error": f"JSON parsing failed: {str(e3)}",
+                                "raw_response": json_str[:500]
+                            })
                 
                 # Convert back to string with proper formatting
                 return json.dumps(parsed_result, ensure_ascii=False)
                 
             except Exception as e:
-                logger.error(f"Failed to parse JSON response: {str(e)}")
+                logger.error(f"Error processing response: {str(e)}")
                 logger.error(f"Raw response: {result}")
-                raise ValueError(f"Failed to parse LLM response as JSON: {str(e)}")
+                return json.dumps({
+                    "score": 0.5,
+                    "reasoning": "Error processing response",
+                    "criteria_scores": {
+                        "detection_effectiveness": 0.5,
+                        "false_positive_control": 0.5
+                    },
+                    "improvement_synopsis": "Error processing response",
+                    "error": str(e),
+                    "raw_response": result[:500]
+                })
                 
         except Exception as e:
             logger.error(f"Error during rule comparison: {e}", exc_info=True)
-            raise
+            return json.dumps({
+                "score": 0.5,
+                "reasoning": f"Error during comparison: {str(e)}",
+                "criteria_scores": {
+                    "detection_effectiveness": 0.5,
+                    "false_positive_control": 0.5
+                },
+                "improvement_synopsis": "Error during comparison",
+                "error": str(e)
+            })
 
     @weave.op()
     def assess_rule(self, rule: str) -> str:

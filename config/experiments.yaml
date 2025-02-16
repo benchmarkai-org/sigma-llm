@@ -11,5 +11,5 @@ experiments:
       
   - name: gemini
     config:
-      MODEL_NAME: gemini-1.5-flash
+      MODEL_NAME: gemini-2.0-flash
       SERVICE_URL: https://my-microservice-680275457059.us-central1.run.app

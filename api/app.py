@@ -159,7 +159,7 @@ def summarize_detection():
         model = data.get('model', 'claude-3-5-sonnet-latest')
         
         # Validate model
-        SUPPORTED_MODELS = ['gpt-4o', 'gemini-1.5-flash', 'claude-3-5-sonnet-latest']
+        SUPPORTED_MODELS = ['gpt-4o', 'gemini-2.0-flash', 'claude-3-5-sonnet-latest']
         if model not in SUPPORTED_MODELS:
             error_msg = f"Invalid model '{model}' specified. Supported models: {', '.join(SUPPORTED_MODELS)}"
             logger.warning(error_msg)

@@ -3,7 +3,7 @@ import yaml
 import json
 import requests
 import urllib3
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import List, Dict
 import logging
@@ -108,7 +108,7 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
             if rule_date:
                 try:
                     # Handle different date formats
-                    if isinstance(rule_date, datetime):
+                    if isinstance(rule_date, (datetime, date)):
                         rule_date = rule_date.strftime('%Y-%m-%d')
                     elif isinstance(rule_date, str):
                         # Try to parse various date formats
@@ -120,9 +120,11 @@ def process_rules_to_query_pairs(rules_dir: str, config: Dict) -> List[Dict]:
                             rule_date = datetime.strptime(rule_date, '%Y-%m-%d').strftime('%Y-%m-%d')
                     else:
                         logger.warning(f"Unexpected date format in {yaml_file}: {type(rule_date)}")
+                        logger.debug(f"Date value: {rule_date}")
                         skipped_count += 1
                         continue
-                        
+
+                    # Parse the standardized date string
                     rule_date = datetime.strptime(rule_date, '%Y-%m-%d')
                     date_type = "modified" if rule_dict.get('modified') else "creation"
                     logger.debug(f"Processing rule with {date_type} date {rule_date}: {rule_dict.get('title')}")

@@ -69,7 +69,7 @@ jobs:
           image: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO }}/${{ env.REPO }}:${{ github.sha }}
           env_vars: |
             FLASK_ENV=production
-            LLM_MODEL_NAME=${{ secrets.LLM_MODEL_NAME }}
+            ${{ secrets.LLM_MODEL_NAME != '' && format('LLM_MODEL_NAME={0}', secrets.LLM_MODEL_NAME) || '' }}
           secrets: |
             SERVICE_API_KEY=SERVICE_API_KEY:latest
             OPENAI_API_KEY=OPENAI_API_KEY:latest

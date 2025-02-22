@@ -47,19 +47,36 @@ class RuleState(TypedDict):
     final_rule: str
 
 class LLMManager(LLMBase):
-    def __init__(self, model_name: str = "gpt-4o",
+    def __init__(self, model_name: str = None,
                  wandb_project: str = "sigma-rule-evaluation",
                  use_improvement_loop: bool = False,
                  max_iterations: int = 2):
-        logger.info(f"Initializing LLMManager with model: {model_name}")
+        """
+        Initialize the LLM Manager with the specified model and configuration.
+        
+        Args:
+            model_name: Name of the LLM model to use. If None, will use LLM_MODEL_NAME environment variable.
+                       Supported formats:
+                       - OpenAI: "gpt-4o" or "ft:gpt-4-*" for fine-tuned models
+                       - Google: "gemini-2.0-flash"
+                       - Anthropic: "claude-3-5-sonnet-latest"
+            wandb_project: Weights & Biases project name for logging
+            use_improvement_loop: Whether to use the rule improvement loop
+            max_iterations: Maximum number of improvement iterations
+        """
+        logger.info("Initializing LLMManager")
         try:
+            # Get model name from environment variable if not provided
+            self.model_name = model_name or os.getenv("LLM_MODEL_NAME", "gpt-4o")
+            logger.info(f"Using model: {self.model_name}")
+            
             self.vectorstore = self._init_vectorstore()
-            self.llm = self._init_llm(model_name)
+            self.llm = self._init_llm(self.model_name)
             self.use_improvement_loop = use_improvement_loop
             self.max_iterations = max_iterations
             self._improvement_counter = 0
             self.rule_generation_graph = self._create_rule_generation_graph()
-            self._init_weave(wandb_project) # Initialize weave here
+            self._init_weave(wandb_project)
             logger.info("LLMManager initialization completed successfully")
         except Exception as e:
             logger.error(f"Failed to initialize LLMManager: {str(e)}", exc_info=True)
@@ -106,27 +123,49 @@ class LLMManager(LLMBase):
 
     @weave.op()
     def _init_llm(self, model_name: str):
+        """
+        Initialize the appropriate LLM based on the model name.
+        
+        Args:
+            model_name: Name/identifier of the model to initialize.
+                       Format depends on the provider:
+                       - OpenAI: "gpt-4o" or "ft:gpt-4-*" for fine-tuned models
+                       - Google: "gemini-2.0-flash"
+                       - Anthropic: "claude-3-5-sonnet-latest"
+        
+        Returns:
+            Initialized LLM instance from the appropriate provider
+        
+        Raises:
+            ValueError: If the model name is not supported or required API key is missing
+        """
         logger.info(f"Initializing LLM with model: {model_name}")
         
-        if model_name.startswith("gpt-4o"):
+        if model_name.startswith("gpt-4o") or model_name.startswith("ft:gpt-4"):
+            if not os.getenv("OPENAI_API_KEY"):
+                raise ValueError("OpenAI API key not found in environment")
             return ChatOpenAI(
-                model_name="gpt-4o",
+                model_name=model_name,
                 temperature=0
             )
         elif model_name == "gemini-2.0-flash":
+            if not os.getenv("GOOGLE_API_KEY"):
+                raise ValueError("Google API key not found in environment")
             return ChatGoogleGenerativeAI(
                 model="gemini-2.0-flash",
                 temperature=0,
                 google_api_key=os.getenv("GOOGLE_API_KEY")
             )
         elif model_name == "claude-3-5-sonnet-latest":
+            if not os.getenv("ANTHROPIC_API_KEY"):
+                raise ValueError("Anthropic API key not found in environment")
             return ChatAnthropic(
                 model="claude-3-5-sonnet-latest",
                 temperature=0,
                 anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")
             )
         else:
-            raise ValueError(f"Unsupported model: {model_name}")
+            raise ValueError(f"Unsupported model: {model_name}. Supported models: gpt-4o, ft:gpt-4-*, gemini-2.0-flash, claude-3-5-sonnet-latest")
 
     @weave.op()
     def _retrieve_context(self, state: RuleState) -> RuleState:

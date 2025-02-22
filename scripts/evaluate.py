@@ -45,30 +45,37 @@ def generate_rule(query: str, config: Dict) -> str:
         headers = {"Authorization": f"Bearer {config.get('SERVICE_API_KEY', '')}"}
         payload = {"query": query}
 
-        # Set up a session with a retry strategy to handle 503 errors
+        # Set up a session with a retry strategy to handle various errors
         session = requests.Session()
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[503],
-            allowed_methods=["POST"]
+            total=5,  # Increased total retries
+            backoff_factor=2,  # Exponential backoff
+            status_forcelist=[500, 502, 503, 504],  # Include all common server errors
+            allowed_methods=["POST"],
+            respect_retry_after_header=True
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
 
-        timeout_seconds = 600
+        timeout_seconds = 600  # 10 minute timeout for long generations
 
-        response = session.post(url, json=payload, headers=headers, timeout=timeout_seconds)
-        response.raise_for_status()
-        data = response.json()
-        rule = data.get("rule")
-        if not rule:
-            raise Exception("No rule returned from service")
-        return rule
+        try:
+            response = session.post(url, json=payload, headers=headers, timeout=timeout_seconds)
+            response.raise_for_status()
+            data = response.json()
+            rule = data.get("rule")
+            if not rule:
+                logger.error("No rule returned from service")
+                return ""  # Return empty string instead of raising to allow continuing with other cases
+            return rule
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed after retries: {str(e)}")
+            return ""  # Return empty string instead of raising to allow continuing with other cases
+            
     except Exception as e:
         logger.error(f"Rule generation failed: {str(e)}")
-        raise Exception(f"Failed to generate rule: {str(e)}")
+        return ""  # Return empty string instead of raising to allow continuing with other cases
 
 def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
     """
@@ -85,8 +92,8 @@ def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
         session = requests.Session()
         retry_strategy = Retry(
             total=5,  # Increased total retries
-            backoff_factor=2,  # Exponential backoff
-            status_forcelist=[500, 502, 503, 504],  # Include all common server errors
+            backoff_factor=3,  # More aggressive exponential backoff
+            status_forcelist=[500, 502, 503, 504, 429],  # Include rate limit errors
             allowed_methods=["POST"],
             respect_retry_after_header=True
         )
@@ -95,7 +102,8 @@ def get_judge_comparison(rule1: str, rule2: str, config: Dict) -> Dict:
         session.mount("https://", adapter)
 
         try:
-            response = session.post(url, json=payload, headers=headers, timeout=60)
+            # Increased timeout to 300 seconds (5 minutes) for complex comparisons
+            response = session.post(url, json=payload, headers=headers, timeout=300)
             response.raise_for_status()
             data = response.json()
             judgment = data.get("judgment")

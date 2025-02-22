@@ -88,7 +88,7 @@ def main():
         logger.info("Environment variables loaded")
         
         # Load experiment configurations
-        logger.info("Attempting to load experiment config...")
+        logger.info("Attempting to load config...")
         experiment_config = load_experiment_config("../config/experiments.yaml")
         
         # Load test cases

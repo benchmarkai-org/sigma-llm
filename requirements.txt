@@ -1,6 +1,6 @@
 flask
 gunicorn==21.2.0
-python-dotenv
+python-dotenv>=1.0.0
 flask-limiter
 flask-cors
 pyOpenSSL
@@ -16,6 +16,9 @@ langsmith
 langgraph
 openai
 pinecone
-weave==0.51.31
+weave
 PyYAML
 beautifulsoup4
+requests
+urllib3
+PyPDF2

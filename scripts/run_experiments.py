@@ -36,9 +36,13 @@ def load_experiment_config(config_file: str) -> dict:
         logger.error(f"Failed to load experiment config: {str(e)}", exc_info=True)
         raise
 
-def run_experiments(experiment_config: dict, test_cases: list):
+def run_experiments(experiment_config: dict, test_cases: list, single_test: bool = False):
     """
     Run multiple experiments with different model configurations.
+    Args:
+        experiment_config: Configuration dictionary
+        test_cases: List of test cases
+        single_test: If True, only run the first test case
     """
     try:
         results = []
@@ -57,10 +61,20 @@ def run_experiments(experiment_config: dict, test_cases: list):
                 **experiment['config']  # Override with experiment-specific config
             }
             
+            # Enhanced logging for model configuration
+            logger.info(f"Using model: {config.get('MODEL_NAME', 'default')}")
+            logger.info(f"Service URL: {config.get('SERVICE_URL')}")
             logger.debug(f"Environment variables present: {list(os.environ.keys())}")
+            logger.debug(f"Full experiment config: {experiment}")
+            
+            # If single_test is True, only use the first test case
+            current_test_cases = test_cases[:1] if single_test else test_cases
+            if single_test:
+                logger.info("Running in single test mode with first test case")
+                logger.info(f"Test case query: {current_test_cases[0]['query']}")
             
             # Run evaluation for this experiment
-            experiment_results = run_evaluation(config, test_cases, experiment_name)
+            experiment_results = run_evaluation(config, current_test_cases, experiment_name)
             results.extend(experiment_results)
             
             # Save intermediate results
@@ -75,6 +89,16 @@ def run_experiments(experiment_config: dict, test_cases: list):
             logger.info(f"Total test cases: {total_cases}")
             logger.info(f"Successful generations: {successful_cases}")
             logger.info(f"Average score: {avg_score:.2f}")
+            
+            # Log individual case results
+            for idx, result in enumerate(experiment_results):
+                logger.info(f"\nCase {idx + 1} Results:")
+                logger.info(f"Query: {result['query'][:100]}...")
+                logger.info(f"Score: {result.get('overall_score', 0):.2f}")
+                if result.get('metrics'):
+                    logger.info(f"Metrics: {result['metrics']}")
+                if result.get('error'):
+                    logger.error(f"Error: {result['error']}")
         
         return results
     except Exception as e:
@@ -87,17 +111,27 @@ def main():
         load_dotenv()
         logger.info("Environment variables loaded")
         
+        # Add logging for key environment variables
+        logger.info(f"Using LLM_MODEL_NAME: {os.getenv('LLM_MODEL_NAME', 'not set')}")
+        logger.info(f"Using MODEL_NAME: {os.getenv('MODEL_NAME', 'not set')}")
+        logger.info(f"Service URL: {os.getenv('SERVICE_URL', 'not set')}")
+        
         # Load experiment configurations
         logger.info("Attempting to load config...")
-        experiment_config = load_experiment_config("../config/experiments.yaml")
+        experiment_config = load_experiment_config("config/experiments.yaml")
         
         # Load test cases
         logger.info("Attempting to load test cases...")
-        test_cases = load_test_cases("../query_rule_pairs.json")
+        test_cases = load_test_cases("query_rule_pairs_reference.json")
+        
+        # Check if we want to run a single test case
+        single_test = os.getenv('SINGLE_TEST', 'false').lower() == 'true'
+        if single_test:
+            logger.info("Running in single test mode")
         
         # Run all experiments
         logger.info("Starting experiments...")
-        results = run_experiments(experiment_config, test_cases)
+        results = run_experiments(experiment_config, test_cases, single_test)
         
         # Save combined results
         logger.info("Saving combined results...")

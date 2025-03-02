@@ -43,7 +43,10 @@ def generate_rule(query: str, config: Dict) -> str:
         service_url = config.get("SERVICE_URL", "https://my-microservice-680275457059.us-central1.run.app")
         url = service_url.rstrip("/") + "/api/v1/rules"
         headers = {"Authorization": f"Bearer {config.get('SERVICE_API_KEY', '')}"}
-        payload = {"query": query}
+        payload = {
+            "query": query,
+            "model_name": config.get("MODEL_NAME")  # Add model name to the request
+        }
 
         # Set up a session with a retry strategy to handle various errors
         session = requests.Session()

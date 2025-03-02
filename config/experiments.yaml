@@ -1,15 +1,16 @@
 experiments:
-  - name: gpt4
+  - name: finetuned-gpt4
     config:
-      MODEL_NAME: gpt-4o
+      MODEL_NAME: ft:gpt-4o-2024-08-06:benchmark-ai:benchmark-reference-sigma:B3jIoBUt
       SERVICE_URL: https://my-microservice-680275457059.us-central1.run.app
+
+  # Commented out models for future reference
+  # - name: claude
+  #   config:
+  #     MODEL_NAME: claude-3-5-sonnet-latest
+  #     SERVICE_URL: https://my-microservice-680275457059.us-central1.run.app
       
-  - name: claude
-    config:
-      MODEL_NAME: claude-3-5-sonnet-latest
-      SERVICE_URL: https://my-microservice-680275457059.us-central1.run.app
-      
-  - name: gemini
-    config:
-      MODEL_NAME: gemini-2.0-flash
-      SERVICE_URL: https://my-microservice-680275457059.us-central1.run.app
+  # - name: gemini
+  #   config:
+  #     MODEL_NAME: gemini-2.0-flash
+  #     SERVICE_URL: https://my-microservice-680275457059.us-central1.run.app
